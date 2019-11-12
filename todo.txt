@@ -1,0 +1,20 @@
+March is the deadline for a working robot. 
+
+Ben does fabrication (with help from chris), Chris does the coding on the Raspi. 
+
+Todo Chris: 
+  - Get raspi up and running again. 
+    - startx into xterm for writing with neovim or startx into pygame. 
+  - lookup pygame tutorial. 
+  - get simplest pygame loop to run
+  - get pygame to read webcams
+  - get pygame to read xbee
+  - communicate with arbotics from pygame. 
+  - CAD software running on work laptop. 
+
+Todo Ben: 
+  - Clean up basement
+  - order parts for gun
+  - Bug Jess & Jacob
+  - Get CAD software running (preferrably same as Chris has). 
+
