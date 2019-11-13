@@ -18,3 +18,9 @@ Todo Ben:
   - Bug Jess & Jacob
   - Get CAD software running (preferrably same as Chris has). 
 
+Todo Jacob:
+  - Come to terms with the bad grammar
+  - Implement basic movement scheme
+  - Make it run without bugs
+  - Speed improvements
+  - 6 hours per week
