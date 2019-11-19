@@ -90,7 +90,7 @@ def tossc(theta):
     #s.write("<#1 P500 #2 P500 #3 P500 #4 P500 #5 P500 #6 P500 #7 P500 #8 P500 #9 P500 #10 P500 #11 P500 #12 P500k>"
     return
 #0.27166 is the limit of the leg in the x and y with 5 cm z position. 19.2cm for 45 deg both legs
-"""
+
 legpos0 = [0.1920/2, 0.1921/2, 0.06]
 legpos1 = [0.1920/2, 0.1921/2, 0.12]
 legpos2 = [0.1920/2, 0.1921/2, 0.12]
@@ -105,7 +105,7 @@ testing = theta[1]
 print(testing)
 print("<#1 P%s #2 P%s #3 P%s #4 P%s #5 P%s #6 P%s #7 P%s #8 P%s #9 P%s #10 P%s #11 P%s #12 P%sk>" % (thetatoservo(theta[0][0]),thetatoservo(theta[0][1]),thetatoservo(theta[0][2]),thetatoservo(theta[1][0]),thetatoservo(theta[1][1]),thetatoservo(theta[1][2]),thetatoservo(theta[2][0]),thetatoservo(theta[2][1]), thetatoservo(theta[2][2]),thetatoservo(theta[3][0]),thetatoservo(theta[3][1]),thetatoservo(theta[3][2])))
 
-
+"""
 while 1:
     tossc(theta)
     time.sleep(1)
@@ -126,17 +126,20 @@ def bodypostolegpos(bodypos):
 def area(x1,x2,y2,x3,y3):
     return abs((x1*(y2-y3)+x2*(y3-y1)+x3*(y1-y2))/2.0)
 
-def masscentercheck(legposstep,bodypos):
+def masscentercheck(legposstep,bodypos,i):
+    massindexes = [0,1,2,3]
+    massindexes.remove(i) #This creates the index to check the center of mass for the other legs
     #Check if each combination of legs gives a triangle that the center of mass resides inside
     #To do so check if bodypos point is inside the points created by legs 0-2
-    temppt0 = [legposstep[0][0], legposstep[0][1]]
-    temppt1 = [legposstep[1][0], legposstep[1][1]]
-    temppt2 = [legposstep[2][0], legposstep[2][1]]
+    temppt0 = [legposstep[massindexes[0]][0], legposstep[massindexes[0]][1]]
+    temppt1 = [legposstep[massindexes[1]][0], legposstep[massindexes[1]][1]]
+    temppt2 = [legposstep[massindexes[2]][0], legposstep[massindexes[2]][1]]
     tempbody = bodypos
     test = ptInTriang(bodypos,temppt0,temppt1,temppt2)
     #print(test)
     #print(legposstep[0], legposstep[1], legposstep[2], bodypos)
     return test
+
 def ptInTriang(p_test, p0, p1, p2):       
      dX = p_test[0] - p0[0]
      dY = p_test[1] - p0[1]
@@ -153,8 +156,7 @@ def ptInTriang(p_test, p0, p1, p2):
          return (  (s_p >= 0) and (t_p >= 0) and (s_p + t_p) <= D  )
      else:
          return (  (s_p <= 0) and (t_p <= 0) and (s_p + t_p) >= D  )
-
-        
+       
 
 #As it walks, bodypos is changing.
 #bodypos - bodyposinit is the variable which it uses for movement,
@@ -177,21 +179,53 @@ def walking(boop):
     legposLF = [[0. for x in range(3)] for x in range(4)]
     legposstep = [[0. for x in range(3)] for x in range(4)]
     Zmid = 0.12
-    bodyposinit = [0.0, 0.0, Zmid]
+    
+    bodyposinit = [0.05, 0.0, Zmid]
     bodypos = bodyposinit
     legposstep[0] = [0, initpos+r, Zmid]
     legposstep[1] = [-initpos-r, 0, Zmid]
     legposstep[2] = [initpos+r, 0, Zmid]
     legposstep[3] = [0, -initpos-r, Zmid]
+    legposstepINIT = legposstep #Save this variable for now....temporary
     j = 0
     rev = 0
+    upleg = 0 #This is the leg that is initially up
+    Zup = 0.02 #The amount the upleg is raised from the floor
+    tempmove = 1
+    from operator import add
     while 1:
-        bodypos = [0, float(j)/300, Zmid]
-        #print(bodypos)
-        #print(bodyposinit)
-        legposLF = legposTOlegposLF(legposstep,bodypos)
-        masscentercheck(legposstep,bodypos)
+        delbody = [0,float(-j*tempmove)/500,0.0] #Test code for the direction the robot is given for movement
+        bodypos = np.asarray(bodypos) - np.asarray(delbody) #Move the robot body by the directed amount
+        tempmove = 1
+        #Alter upleg motion
+        #Move upleg in the direction of motion
+        legposstep[upleg] = [legposstep[upleg][0], legposstep[upleg][1], Zmid-Zup] #Make sure leg is slightly raised
+        legposstep[upleg] = np.asarray(legposstep[upleg]) - 4*np.asarray(delbody) #Hackey for now
+        #print(legposstep[upleg],bodypos)
+        legposLF = legposTOlegposLF(legposstep,bodypos) #Determine the leg position vector in relation to body frame
         
+
+
+        
+        #Search through the legs and determine if any legs provide a combination that would give an unbalanced robot
+        legcheck = masscentercheck(legposstep,bodypos,upleg)
+        if legcheck == False:
+            #If about to be unstable, check which combination will give stability
+            for i in range(4):
+                legcheckscan = masscentercheck(legposstep,bodypos,i)
+                if legcheckscan == True:
+                    upleg = i #Change the upleg with the one to provide that found stability.
+                    legposstep = legposstepINIT #Temporary push to make legs go back to normal for now
+                    print("Changing upleg to ", upleg)
+        
+
+                    
+        """            
+        for i in range(4):
+            legcheck = masscentercheck(legposstep,bodypos,i)
+            if legcheck == False:
+                print("This leg cannot go up", i)
+        """
         #templegpos = bodypostolegpos(tempbodypos)
         temptheta = [[0. for x in range(3)] for x in range(4)]
         temptheta[0]=legpostotheta(legposLF[0])
@@ -199,21 +233,27 @@ def walking(boop):
         temptheta[2]=legpostotheta(legposLF[2])
         temptheta[3]=legpostotheta(legposLF[3])
         theta = offsettheta(temptheta)
-        #tossc(theta)
+        tossc(theta)
         #print("<#1 P%s #2 P%s #3 P%s #4 P%s #5 P%s #6 P%s #7 P%s #8 P%s #9 P%s #10 P%s #11 P%s #12 P%sk>" % (thetatoservo(theta[0][0]),thetatoservo(theta[0][1]),thetatoservo(theta[0][2]),thetatoservo(theta[1][0]),thetatoservo(theta[1][1]),thetatoservo(theta[1][2]),thetatoservo(theta[2][0]),thetatoservo(theta[2][1]), thetatoservo(theta[2][2]),thetatoservo(theta[3][0]),thetatoservo(theta[3][1]),thetatoservo(theta[3][2])))
 
         botmovement = np.asarray(bodypos) - np.asarray(bodyposinit)
-        #print("Bot position", botmovement)
-        if j == 22:
+        print(botmovement)
+        if botmovement[1] > 0.0533:
             rev = 1
+            tempmove = 5
             print("REVERSING NEXT")
-        if j == -22:
+            print("Bot position", botmovement)
+            #upleg = 2
+        if botmovement[1] < -0.0533:
             rev = 0
+            tempmove = 5
             print("REVERSING NEXT")
+            print("Bot position", botmovement)
+            #upleg = 1
         if rev == 0:
-            j = j+1
+            j = 1
         else:
-            j = j-1
+            j = -1
         time.sleep(0.04)
 Zmid = 0.12
 walking(1)
