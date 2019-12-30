@@ -4,6 +4,11 @@ import pygame
 import time
 import numpy as np
 
+#PROBLEMS RIGHT NOW
+
+#One of the [0] motors on a leg isn't moving....check why
+#It keeps thinking its in an unstable position when it is not. Fix this.
+#It becomes unstable too often. Look into adding a buffer around that.
 
 #--------------------------------------------------------------------------------------------
 #--------------------------Functions to be used
@@ -20,10 +25,10 @@ def legpostotheta(legpos):
 def thetatoservo(angle):
     #sscnumber = angle*1024/300*180/math.pi* + 512. #Assuming in radians
     sscnumber = angle*195.56959 + 512. #Assuming in radians    
-    if sscnumber > 800:
+    if sscnumber > 750:
         sscnumber = 800
         #print("YOU'RE TOO HIGH")
-    if sscnumber < 200:
+    if sscnumber < 250:
         sscnumber = 200
         #print("YOU'RE TOO LOW")
     sscnumberout = int(round(sscnumber))
@@ -174,6 +179,71 @@ def distancecheck(legpos1,legpos2,bodypos,veloc):
             dist = (bodypos[0]-legpos1[0]-leglineslope*(bodypos[1]-legpos1[1]))/denominator
     return dist
 
+#Function that finds the optimal position of the upleg based on the velocity vector and the other leg positions
+def optimaluplegposition(velocangle,legminboundangle,legmaxbound,Zup,bodypos,bodyframeadjustment,upleg,legposstep,delbody):
+    uplegxoption1 = 0.95*legmaxbound*math.cos(velocangle+legminboundangle)
+    uplegyoption1 = 0.95*legmaxbound*math.sin(velocangle+legminboundangle)
+    uplegxoption2 = 0.95*legmaxbound*math.cos(velocangle-legminboundangle)
+    uplegyoption2 = 0.95*legmaxbound*math.sin(velocangle-legminboundangle)
+    legposstepuption1 = [uplegxoption1, uplegyoption1, -Zup]
+    legposstepuption2 = [uplegxoption2, uplegyoption2, -Zup]
+    #Convert to bodyframe....
+    legposstepuption1 = np.asarray(legposstepuption1) + bodypos + bodyframeadjustment[upleg]
+    legposstepuption2 = np.asarray(legposstepuption2) + bodypos + bodyframeadjustment[upleg]
+    """
+    #print(legposstepuption1)
+    #print(legposstepuption2)
+    #Find the appropriate intersecting line for each. (Find which intersecting distance is least of the leg options above zero)
+    downlegoptions = [0,1,2,3]
+    downlegoptions.remove(upleg) #This creates the indices for the downleg options
+    #Find the distances
+    distchecktemp1 = distancecheck(legposstepuption1,legposstep[downlegoptions[0]],bodypos,delbody)
+    distchecktemp2 = distancecheck(legposstepuption1,legposstep[downlegoptions[1]],bodypos,delbody)
+    distchecktemp3 = distancecheck(legposstepuption1,legposstep[downlegoptions[2]],bodypos,delbody)
+    distcheckarray1 = [distchecktemp1, distchecktemp2, distchecktemp3]
+    distcheckarray1[distcheckarray1 < 0] = 100 #Set negative values to a very high number
+    correctdist1 = min(distcheckarray1)
+    
+    distchecktemp1 = distancecheck(legposstepuption2,legposstep[downlegoptions[0]],bodypos,delbody)
+    distchecktemp2 = distancecheck(legposstepuption2,legposstep[downlegoptions[1]],bodypos,delbody)
+    distchecktemp3 = distancecheck(legposstepuption2,legposstep[downlegoptions[2]],bodypos,delbody)
+    distcheckarray2 = [distchecktemp1, distchecktemp2, distchecktemp3]
+    distcheckarray2[distcheckarray2 < 0] = 100 #Set negative values to a very high number
+    correctdist2 = min(distcheckarray2)
+    
+    if correctdist1 > correctdist2:
+        optimalupleg = legposstepuption1
+    else:
+        optimalupleg = legposstepuption2
+    """
+
+    #Another way to tell which leg position is optimal is based on the velocity angle and which leg it is...much more rough but worth comparing
+    if upleg == 0:
+        if velocangle < 1.57079632679 and velocangle > -1.57079632679:
+            optimalupleg = legposstepuption1
+        else:
+            optimalupleg = legposstepuption2
+    if upleg == 1:
+        if velocangle > 0:
+            optimalupleg = legposstepuption1
+        else:
+            optimalupleg = legposstepuption2
+
+    if upleg == 2:
+        if velocangle > 1.57079632679 and velocangle < -1.57079632679:
+            optimalupleg = legposstepuption1
+        else:
+            optimalupleg = legposstepuption2
+
+    if upleg == 3:
+        if velocangle < 0:
+            optimalupleg = legposstepuption1
+        else:
+            optimalupleg = legposstepuption2
+            
+    return optimalupleg
+
+        
 #--------------------------------------------------------------------------------------------
 #--------------------------Main loop
 #Basic walking function which moves the robot by changing the legs and giving new motor commands
@@ -200,13 +270,13 @@ def walking(boop):
     legposstep[1] = np.asarray(legposstep[1]) + [-0.01, 0.0, 0.0]
     legposstep[3] = np.asarray(legposstep[3]) + [0.04, 0.0, 0.0]
     
-    j = 0.1
+    j = 1
     rev = 0
     upleg = 0 #This is the leg that is initially up
-    Zup = 0.02 #The amount the upleg is raised from the floor
+    Zup = 0.05 #The amount the upleg is raised from the floor
     tempmove = 1
     legbounds = 0.2 #How far a leg can extend before switching to another leg....number needs to be optimized
-    legmaxbound = 0.23 #How far a leg can extend
+    legmaxbound = 0.18 #How far a leg can extend
     legminbound = 0.05 #How close a leg can contract
     legminboundangle = math.asin(legminbound/legmaxbound) #angle used for optimal upleg position
     from operator import add
@@ -216,7 +286,7 @@ def walking(boop):
 
     
     while 1:
-        time.sleep(.2)
+        #time.sleep(.2)
         print('NEW STEP')
         delbody = [float(j*tempmove)/10000,float(j*tempmove)/200,0.0] #Test code for the direction the robot is given for movement
         bodypos = np.asarray(bodypos) + np.asarray(delbody) #Move the robot body by the directed amount
@@ -230,43 +300,12 @@ def walking(boop):
         #wrong direction, and of the other two one will have a location within stability for longer. This one is chosen.
 
         #Find the locations where the leg should be
-        velocangle = math.atan2(delbody[0],delbody[1])
-        uplegxoption1 = 0.95*legmaxbound*math.cos(velocangle+legminboundangle)
-        uplegyoption1 = 0.95*legmaxbound*math.sin(velocangle+legminboundangle)
-        uplegxoption2 = 0.95*legmaxbound*math.cos(velocangle-legminboundangle)
-        uplegyoption2 = 0.95*legmaxbound*math.sin(velocangle-legminboundangle)
-        legposstepuption1 = [uplegxoption1, uplegyoption1, -Zup]
-        legposstepuption2 = [uplegxoption2, uplegyoption2, -Zup]
-        #Convert to bodyframe....
-        legposstepuption1 = np.asarray(legposstepuption1) + bodypos + bodyframeadjustment[upleg]
-        legposstepuption2 = np.asarray(legposstepuption2) + bodypos + bodyframeadjustment[upleg]
-        #print(legposstepuption1)
-        #print(legposstepuption2)
-        #Find the appropriate intersecting line for each. (Find which intersecting distance is least of the leg options above zero)
-        downlegoptions = [0,1,2,3]
-        downlegoptions.remove(upleg) #This creates the indices for the downleg options
-        #Find the distances
-        distchecktemp1 = distancecheck(legposstepuption1,legposstep[downlegoptions[0]],bodypos,delbody)
-        distchecktemp2 = distancecheck(legposstepuption1,legposstep[downlegoptions[1]],bodypos,delbody)
-        distchecktemp3 = distancecheck(legposstepuption1,legposstep[downlegoptions[2]],bodypos,delbody)
-        distcheckarray1 = [distchecktemp1, distchecktemp2, distchecktemp3]
-        distcheckarray1[distcheckarray1 < 0] = 100 #Set negative values to a very high number
-        correctdist1 = min(distcheckarray1)
+        #Find the optimal locations of the upleg and pick the best one.
+        velocangle = math.atan2(delbody[1],delbody[0])
+        legposstep[upleg] = optimaluplegposition(velocangle,legminboundangle,legmaxbound,Zup,bodypos,bodyframeadjustment,upleg,legposstep,delbody)
         
-        distchecktemp1 = distancecheck(legposstepuption2,legposstep[downlegoptions[0]],bodypos,delbody)
-        distchecktemp2 = distancecheck(legposstepuption2,legposstep[downlegoptions[1]],bodypos,delbody)
-        distchecktemp3 = distancecheck(legposstepuption2,legposstep[downlegoptions[2]],bodypos,delbody)
-        distcheckarray2 = [distchecktemp1, distchecktemp2, distchecktemp3]
-        distcheckarray2[distcheckarray2 < 0] = 100 #Set negative values to a very high number
-        correctdist2 = min(distcheckarray2)
-        
-        if correctdist1 > correctdist2:
-            legposstep[upleg] = legposstepuption1
-        else:
-            legposstep[upleg] = legposstepuption2
 
-        #Find the leg frame positions of all legs
-        
+        #Find the leg frame positions of all legs       
         legposLF = legposstepTOlegposLF(legposstep,bodypos)
         print('upleg is', upleg)
         #print(legposLF)
@@ -286,13 +325,18 @@ def walking(boop):
 
         # -------------------- Check if leg needs to be changed
         #Leg choice algorithm is initiated by a leg-change event
-        #leg-change event occurs when the body position is about to move outside of stability, which is checked by whether the center of mass is about to exit a region of stability
-        #Combined algorithm runs through the leg combinations and bounds and decides if a leg needs to be changed and the optimal leg to change to
+        #Leg change is prompted by one of four events happening:
+        #               A leg reaches its maximum bound
+        #               A leg reaches its minimum bound
+        #               The center of mass is about to cross a triangle of stability to another triangle of stability
+        #               The center of mass is about to cross a triangle of stability to no stability
+        #If multiple of these are about to occur, the instability event is given the highest priority due to the buffer on the bounds
+        #Once the new upleg is chosen, on the next loop the upleg will move to its optimal leg placement
         #The new upleg is then given the command to move to the optimal leg placement for the next step.
-        #Which leg is changed to upleg has priority goes: instability before bounds. Bounds are somewhat loose and there is some buffer before falling
-        #Ideally after a leg change from instability, if a bounds leg change is needed it will occur.
         #Check if leg needs to change. If so set legchange to 1
         legchange = 0
+        
+        #Check if legs are about to be unstable
         legcheck = masscentercheck(legposstep,bodypos,upleg)
         if legcheck == False:
             legchange = 2
@@ -311,19 +355,19 @@ def walking(boop):
                     legchange = 1
                     legtochange = i
                 print('leg change due to min bound reached on leg', i)
-            #Check if legs are about to be unstable
+
                 
 
         #If leg change is due to a bound being reached, change that one and continue
         if legchange == 1:
             upleg = legtochange
-            
             #print('new upleg is', upleg)
             downlegs = [0,1,2,3]
             downlegs.remove(upleg) #This creates the indices for the downleg options
             for i in downlegs:
                 #print(downlegs)
                 legposstep[i][2] = Zmid
+                
         #If leg change is due and because of stability, decide best up leg. Is this due to body moving towards or away intersection cross?
         #If this is due to the leg moving towards, find the best available leg to move up to maintain stability.
         #If this is due to the leg moving away, find the leg which will provide the best stability when it has moved to the best position it can have
@@ -338,26 +382,41 @@ def walking(boop):
                     print(i,' passed the uplegcheck')
             #Once leg options are found, determine which will be stable for longer by checking the distance between the body position point and the
             #edge of the triangle of stability option along the velocity vector.
-            print(uplegoptionarray)
-            for i in uplegoptionarray:
-                #There are three lines formed by the leg combination, but only one that would be intersected along the velocity vector (positive direction). Find this line.
-                #First find which legs are considered down
-                uplegoption = i
-                downlegoptions = [0,1,2,3]
-                downlegoptions.remove(uplegoption) #This creates the indices for the downleg options
-                #Determine which two legs create the line that will be intersected
-                print(delbody)
-                distchecktemp1 = distancecheck(legposstep[downlegoptions[0]],legposstep[downlegoptions[1]],bodypos,delbody)
-                distchecktemp2 = distancecheck(legposstep[downlegoptions[1]],legposstep[downlegoptions[2]],bodypos,delbody)
-                distchecktemp3 = distancecheck(legposstep[downlegoptions[2]],legposstep[downlegoptions[0]],bodypos,delbody)
-                correctdist = max([distchecktemp1, distchecktemp2, distchecktemp3])
-                print(correctdist)
-                corrdistarray.append(correctdist)
-            #Choose the upleg that is the furthest from the intersecting line along the velocity vector
-            if corrdistarray[0] > corrdistarray[1]:
-                upleg = uplegoptionarray[0]
+
+            #Check if moving towards or away from regions of stability. If no upleg options are found, it is moving away:
+            if not uplegoptionarray:
+                #Robot is about to fall over and have no other leg to switch to. Find which leg would be optimal
+                #For now, pick the leg closest to the vector of direction
+                print("robot is moving from regions of stability. Picking closest leg")
+                upleg = 1
+                print(velocangle)
+                if velocangle > -2.35619:
+                    upleg = 3
+                    if velocangle > -0.7853981:
+                        upleg = 2
+                        if velocangle > 0.7853981:
+                            upleg = 0
+            #If uplegoptionarray contains something, it is moving towards regions of stability.
             else:
-                upleg = uplegoptionarray[1]
+                for i in uplegoptionarray:
+                    #There are three lines formed by the leg combination, but only one that would be intersected along the velocity vector (positive direction). Find this line.
+                    #First find which legs are considered down
+                    uplegoption = i
+                    downlegoptions = [0,1,2,3]
+                    downlegoptions.remove(uplegoption) #This creates the indices for the downleg options
+                    #Determine which two legs create the line that will be intersected
+                    print(delbody)
+                    distchecktemp1 = distancecheck(legposstep[downlegoptions[0]],legposstep[downlegoptions[1]],bodypos,delbody)
+                    distchecktemp2 = distancecheck(legposstep[downlegoptions[1]],legposstep[downlegoptions[2]],bodypos,delbody)
+                    distchecktemp3 = distancecheck(legposstep[downlegoptions[2]],legposstep[downlegoptions[0]],bodypos,delbody)
+                    correctdist = max([distchecktemp1, distchecktemp2, distchecktemp3])
+                    print(correctdist)
+                    corrdistarray.append(correctdist)
+                #Choose the upleg that is the furthest from the intersecting line along the velocity vector
+                if corrdistarray[0] > corrdistarray[1]:
+                    upleg = uplegoptionarray[0]
+                else:
+                    upleg = uplegoptionarray[1]
             #print('new upleg is', upleg)
             #Set the old upleg to the correct z position by changing all
             #print('otherlegs down')
