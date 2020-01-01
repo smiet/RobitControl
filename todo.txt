@@ -19,8 +19,8 @@ Todo Ben:
   - Get CAD software running (preferrably same as Chris has). 
 
 Todo Jacob:
-  - Come to terms with the bad grammar
-  - Implement basic movement scheme
+  - Come to terms with the bad grammar DONE
+  - Implement basic movement scheme DONE
   - Make it run without bugs
   - Speed improvements
-  - 6 hours per week
+  - 6 hours per week 
